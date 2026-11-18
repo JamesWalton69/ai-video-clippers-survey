@@ -146,6 +146,85 @@ Rule of thumb from these repos: **Whisper model size dominates RAM, the LLM domi
 LLM fits in 8 GB of VRAM; a 14B Q6_K needs ~12–16 GB. Almost every project lets you point the LLM at
 a cloud API instead, which moves the cost to dollars and off your RAM.
 
+## Addendum — three repos checked in depth
+
+### `haziqahmedqasmi/PeakCut` — 962★, Python, MIT, created **14 Nov 2026**
+
+Not in the tables above because it is four days old and already overtook most of the field.
+Same feature profile as `StreamCut` — because **`StreamCut` is a single-commit re-upload of it**:
+`xAmirHamza77/StreamCut` was created 17 Nov, has one commit ("StreamCut v1.0.0"), 0 stars, and a
+`studio/` tree with the identical module layout (`admin.py`, `ai.py`, `asr_worker.py`, `live.py`,
+`jobs.py`, `notices.py`, …). Both are MIT, so it is legal to fork, but use PeakCut. The earlier
+"most complete of the small live clippers" note applies to PeakCut, not StreamCut.
+
+- **VOD + live in one app.** Rolling buffer records a creator's stream and clips while it is still
+  broadcasting, scoring on loudness + chat activity + transcript.
+- **ASR: `sherpa-onnx` + Parakeet, ~480 MB model, one download, runs on CPU locally.** No Whisper,
+  no PyTorch, no CUDA. This is the lightest serious option in this document — it sidesteps the
+  single biggest RAM/VRAM cost every other VOD clipper carries.
+- **AI is swappable and optional.** Gemini / OpenAI / xAI / Groq / OpenRouter / Claude / Ollama /
+  any OpenAI-compatible URL, comma-separated model list tried in order as fallback. No key at all
+  still works, falling back to loudness picks.
+- **Self-hosted server done properly for its size:** per-user data folders, fair-queue per user,
+  self-monitoring (measures CPU/RAM/disk every second and only starts jobs when there is room),
+  SQLite locally / PostgreSQL + Caddy HTTPS via Docker, `/admin` dashboard, scrypt passwords,
+  salted+hashed session tokens.
+- **Honest by design:** refuses to expose itself publicly without accounts (`PEAKCUT_ACCOUNTS=1`),
+  treats transcript text as data before showing it to an LLM, and says up front that it is written
+  to be installed by an AI assistant (`AGENTS.md`), including the Windows 260-character path trap.
+- **No stated RAM figure**, but by construction (no Torch, no Whisper large, CPU ASR) it is the
+  low-RAM pick. AI cost: "a one-hour video is read in about four requests."
+
+### `lxgicstudios/lxgic-clipper` — 12★, Shell, MIT
+
+Six bash scripts (`setup`, `clipper-agent`, `record-stream`, `detect-highlights`,
+`clip-and-format`, `post-clip`) orchestrated by OpenClaw cron. I read the scripts:
+
+- `detect-highlights.sh` is genuine engineering, not a stub: ffmpeg `volumedetect` for mean/max,
+  `astats` per-second RMS with `reset=44100`, scene-change detection at `scene>0.35`, then optional
+  Whisper (probed across several binary names). Scores 0–100, `CLIPPER_THRESHOLD` default 70.
+- `post-clip.sh` posts through the **Postiz API** (self-hostable, ~32 platforms).
+- **No LLM anywhere.** Detection is signal processing, so it will not judge meaning, only loudness,
+  cuts and speech density. That is why it is cheap and portable, and also its ceiling.
+- **It is a funnel for a paid product.** The README carries a price table ($29/$49/$99 per month,
+  "Get it on Whop") for a hosted version and markets 20+ other tools. The scripts are real; treat
+  the repo as marketing for the service.
+- macOS-leaning (`brew`, `/dev/null`, `chmod +x`). 106 KB, last touched Feb 2026, i.e. it predates
+  everything else here and has not kept up.
+
+### `NaufalRizqullah/opensource-clipping` — 322★, Python, MIT
+
+Unchanged from the table above, and worth restating what it costs: it is the **heaviest and least
+local** of the three.
+
+- Faster-Whisper **large-v3** + Pyannote diarization + YOLOv8/MediaPipe face tracking + optional
+  Kokoro TTS for AI voice-over commentary. Needs CUDA to be bearable; the recommended path is a
+  free Colab/Kaggle T4 GPU with a Gemini key.
+- Its actual differentiator is **multi-speaker podcast craft**: split-screen, cinematic camera
+  switching, 3+ speakers, per-speaker frozen-frame fallback, hook intros, BGM ducking. Nothing
+  else here does that as well.
+- **No live clipping.** VOD in, clips out.
+- Effectively a **cloud-GPU product**: a static GitHub Pages front end driving a Kaggle/Colab
+  FastAPI backend. That is clever and free, but it is not "runs on your machine tonight."
+
+### Head to head
+
+| | PeakCut | lxgic-clipper | opensource-clipping |
+|---|---|---|---|
+| Live while broadcasting | ✓ | ✓ | – |
+| Transcription | sherpa-onnx Parakeet, CPU, ~480 MB | optional Whisper binary | faster-whisper large-v3, CUDA |
+| LLM clip picking | any provider, or none | none (signal only) | Gemini / NVIDIA NIM, required for ranking |
+| Multi-speaker podcast craft | – | – | ✓✓ best in field |
+| Auto-posting | YT / IG / TikTok, caps + spacing | Postiz, ~32 platforms | – |
+| Accounts / multi-user | ✓ | – | – |
+| Footprint | ~760 KB, Python + ffmpeg | 106 KB, bash + ffmpeg | 76 MB + Torch + CUDA + HF token |
+| Licence | MIT | MIT | MIT |
+| Catch | 4 days old, 27 open issues already | thin, LLM-free, funnels to paid plan | needs a GPU or Colab |
+
+**Pick:** PeakCut if you want one tool that does VOD and live on a normal machine. lxgic only if you
+want dumb-but-reliable audio/spike clipping driven by cron and want nothing to do with Python.
+opensource-clipping only for real multi-speaker podcasts and you have a GPU or a Colab account.
+
 ## Things worth knowing before you pick
 
 - **Star count ≠ quality here.** `AI-Youtube-Shorts-Generator` has 6.2k stars and a 1.3 MB repo; the
